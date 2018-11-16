@@ -282,42 +282,47 @@ CREATE PROCEDURE transferir(IN monto DECIMAL(16,2), IN cuentaA INT,
 			THEN  # verifico que exista la cuenta destino
 				IF (cuentaA<>cuentaB)
 				THEN  # verifico que las cuentas origen y destino son distintas
-					IF EXISTS (SELECT * FROM cliente_ca WHERE nro_cliente=nro_clienteA AND nro_ca=cuentaA)
-					THEN
-						IF EXISTS (SELECT * FROM caja WHERE cod_caja=nro_caja)
-						THEN  # verifico que exista la caja
-							SELECT saldo INTO saldo_actual_cuentaA
-							FROM caja_ahorro WHERE nro_ca=cuentaA FOR UPDATE;
-							# Recupero el saldo de la cuentaA en la variable saldo_actual_cuentaA.
-							SELECT saldo INTO saldo_actual_cuentaB
-							FROM caja_ahorro WHERE nro_ca=cuentaB FOR UPDATE;
-							# Recupero el saldo de la cuentaB en la variable saldo_actual_cuentaB.      	    
+					IF EXISTS (SELECT * FROM cliente WHERE nro_cliente=nro_clienteA)
+					THEN  # verifico que exista el cliente
+						IF EXISTS (SELECT * FROM cliente_ca WHERE nro_cliente=nro_clienteA AND nro_ca=cuentaA)
+						THEN  # verifico que la cuentaA y el clienteA estén asociados
+							IF EXISTS (SELECT * FROM caja WHERE cod_caja=nro_caja)
+							THEN  # verifico que exista la caja
+								SELECT saldo INTO saldo_actual_cuentaA
+								FROM caja_ahorro WHERE nro_ca=cuentaA FOR UPDATE;
+								# Recupero el saldo de la cuentaA en la variable saldo_actual_cuentaA.
+								SELECT saldo INTO saldo_actual_cuentaB
+								FROM caja_ahorro WHERE nro_ca=cuentaB FOR UPDATE;
+								# Recupero el saldo de la cuentaB en la variable saldo_actual_cuentaB.      	    
       
-							IF saldo_actual_cuentaA >= monto THEN 	  
-							# si el saldo actual de la cuentaA es suficiente para realizar 
-							# la transferencia, entonces actualizo el saldo de ambas cuentas 
-								UPDATE caja_ahorro SET saldo = saldo - monto  WHERE nro_ca=cuentaA;
-								UPDATE caja_ahorro SET saldo = saldo + monto  WHERE nro_ca=cuentaB;
-								INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
-								INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
-								INSERT INTO transferencia VALUES (LAST_INSERT_ID(), nro_clienteA, cuentaA, cuentaB);
-								INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
-								INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
-								INSERT INTO deposito VALUES (LAST_INSERT_ID(), cuentaB);
-								SELECT 'La transferencia se realizo con exito.' AS resultado;               
-							ELSE  
-								SELECT 'Saldo insuficiente para realizar la transferencia.' 
+								IF saldo_actual_cuentaA >= monto THEN 	  
+								# si el saldo actual de la cuentaA es suficiente para realizar 
+								# la transferencia, entonces actualizo el saldo de ambas cuentas 
+									UPDATE caja_ahorro SET saldo = saldo - monto  WHERE nro_ca=cuentaA;
+									UPDATE caja_ahorro SET saldo = saldo + monto  WHERE nro_ca=cuentaB;
+									INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
+									INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
+									INSERT INTO transferencia VALUES (LAST_INSERT_ID(), nro_clienteA, cuentaA, cuentaB);
+									INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
+									INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
+									INSERT INTO deposito VALUES (LAST_INSERT_ID(), cuentaB);
+									SELECT 'La transferencia se realizo con exito.' AS resultado;               
+								ELSE  
+									SELECT 'Saldo insuficiente para realizar la transferencia.' 
+										AS resultado;
+								END IF;
+							ELSE
+								SELECT 'Caja inexistente.'
 									AS resultado;
 							END IF;
 						ELSE
-							SELECT 'Caja inexistente'
-								AS resultado;
+							SELECT 'El cliente no es titular de la caja de ahorro.' AS resultado;
 						END IF;
 					ELSE
-						SELECT 'El cliente no es titular de la caja de ahorro.' AS resultado;
+						SELECT 'Cliente inexistente.' AS resultado;
 					END IF;
 				ELSE
-					SELECT 'Las cuentas origen y destino no pueden ser iguales'
+					SELECT 'Las cuentas origen y destino no pueden ser iguales.'
 						AS resultado;
 				END IF;
 			ELSE  
@@ -325,7 +330,7 @@ CREATE PROCEDURE transferir(IN monto DECIMAL(16,2), IN cuentaA INT,
 					AS resultado;  
 			END IF;
 		ELSE
-			SELECT 'Cuenta origen inexistente'
+			SELECT 'Cuenta origen inexistente.'
 				AS resultado;
 		END IF;
 		
@@ -357,33 +362,39 @@ CREATE PROCEDURE transferir(IN monto DECIMAL(16,2), IN cuentaA INT,
 	 START TRANSACTION;	# Comienza la transacción  
 	   IF EXISTS (SELECT * FROM caja_ahorro WHERE nro_ca=cuenta)
 	   THEN  # verifico que la cuenta exista
-		  IF EXISTS (SELECT * FROM cliente_ca WHERE nro_cliente=cliente AND nro_ca=cuenta)
-		  THEN  # verifico que la cuenta y el cliente estén asociados
-				IF EXISTS (SELECT * FROM caja WHERE cod_caja=nro_caja)
-				THEN  # verifico que exista la caja
-					SELECT saldo INTO saldo_actual_cuenta
-					FROM caja_ahorro WHERE nro_ca=cuenta FOR UPDATE;
-					# Recupero el saldo de la cuenta en la variable saldo_actual_cuenta.   	    
+			IF EXISTS (SELECT * FROM cliente WHERE nro_cliente=cliente)
+			THEN  # verifico que el cliente exista
+				IF EXISTS (SELECT * FROM cliente_ca WHERE nro_cliente=cliente AND nro_ca=cuenta)
+				THEN  # verifico que la cuenta y el cliente estén asociados
+					IF EXISTS (SELECT * FROM caja WHERE cod_caja=nro_caja)
+					THEN  # verifico que exista la caja
+						SELECT saldo INTO saldo_actual_cuenta
+						FROM caja_ahorro WHERE nro_ca=cuenta FOR UPDATE;
+						# Recupero el saldo de la cuenta en la variable saldo_actual_cuenta.   	    
       
-					IF saldo_actual_cuenta >= monto
-					THEN 	  
-					# si el saldo actual de la cuenta es suficiente para realizar 
-					# la extracción, entonces actualizo el saldo de la cuenta
-						UPDATE caja_ahorro SET saldo = saldo - monto  WHERE nro_ca=cuenta;
-						INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
-						INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
-						INSERT INTO extraccion VALUES (LAST_INSERT_ID(), cliente, cuenta);			 
-						SELECT 'La extraccion se realizo con exito.' AS resultado;               
-					ELSE  
-						SELECT 'Saldo insuficiente para realizar la extraccion.' 
+						IF saldo_actual_cuenta >= monto
+						THEN 	  
+						# si el saldo actual de la cuenta es suficiente para realizar 
+						# la extracción, entonces actualizo el saldo de la cuenta
+							UPDATE caja_ahorro SET saldo = saldo - monto  WHERE nro_ca=cuenta;
+							INSERT INTO transaccion (fecha, hora, monto) VALUES (CURDATE(), CURRENT_TIME(), monto);
+							INSERT INTO transaccion_por_caja VALUES (LAST_INSERT_ID(), nro_caja);
+							INSERT INTO extraccion VALUES (LAST_INSERT_ID(), cliente, cuenta);			 
+							SELECT 'La extraccion se realizo con exito.' AS resultado;               
+						ELSE  
+							SELECT 'Saldo insuficiente para realizar la extraccion.' 
+								AS resultado;
+						END IF;
+					ELSE
+						SELECT 'Caja inexistente.'
 							AS resultado;
 					END IF;
 				ELSE
-					SELECT 'Caja inexistente'
+					SELECT 'El cliente no es titular de la caja de ahorro.'
 						AS resultado;
 				END IF;
 		  ELSE
-			SELECT 'El cliente no es titular de la caja de ahorro.' AS resultado;
+			SELECT 'Cliente inexistente.' AS resultado;
 		  END IF;
 	   ELSE  
             SELECT 'Cuenta inexistente.' 
